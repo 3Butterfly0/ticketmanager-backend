@@ -1,0 +1,21 @@
+package com.qubehealth.ticketmanager.dto;
+
+import com.qubehealth.ticketmanager.entity.TicketCategory;
+import com.qubehealth.ticketmanager.entity.TicketPriority;
+import com.qubehealth.ticketmanager.entity.TicketStatus;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class TicketUpdateRequest {
+    @NotBlank(message = "Title is required")
+    private String title;
+
+    @NotBlank(message = "Description is required")
+    private String description;
+
+    private String summary;
+    private TicketCategory category;
+    private TicketPriority priority;
+    private TicketStatus status;
+}
