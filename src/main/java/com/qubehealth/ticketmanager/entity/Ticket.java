@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 
+// Ticket data model is defined here
 @Entity
 @Table(name = "tickets")
 @Data
