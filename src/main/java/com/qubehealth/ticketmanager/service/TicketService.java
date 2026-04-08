@@ -37,6 +37,9 @@ public class TicketService {
         if (request.getPriority() != null) {
             ticket.setPriority(request.getPriority());
         }
+        if (request.getStatus() != null) {
+            ticket.setStatus(request.getStatus());
+        }
         
         Ticket savedTicket = ticketRepository.save(ticket);
         return mapToResponse(savedTicket);
@@ -96,6 +99,12 @@ public class TicketService {
         ticket.setStatus(request.getStatus());
         Ticket updatedTicket = ticketRepository.save(ticket);
         return mapToResponse(updatedTicket);
+    }
+
+    public void deleteTicket(Long id) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+        ticketRepository.delete(ticket);
     }
 
     private TicketResponse mapToResponse(Ticket ticket) {

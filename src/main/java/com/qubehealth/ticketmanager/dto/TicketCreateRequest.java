@@ -2,6 +2,7 @@ package com.qubehealth.ticketmanager.dto;
 
 import com.qubehealth.ticketmanager.entity.TicketCategory;
 import com.qubehealth.ticketmanager.entity.TicketPriority;
+import com.qubehealth.ticketmanager.entity.TicketStatus;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -16,4 +17,5 @@ public class TicketCreateRequest {
     private String summary;
     private TicketCategory category;
     private TicketPriority priority;
+    private TicketStatus status;
 }

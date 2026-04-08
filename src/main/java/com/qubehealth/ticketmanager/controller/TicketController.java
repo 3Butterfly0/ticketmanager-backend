@@ -55,4 +55,10 @@ public class TicketController {
             @Valid @RequestBody StatusUpdateRequest request) {
         return ResponseEntity.ok(ticketService.updateStatus(id, request));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTicket(@PathVariable(name = "id") Long id) {
+        ticketService.deleteTicket(id);
+        return ResponseEntity.noContent().build();
+    }
 }
