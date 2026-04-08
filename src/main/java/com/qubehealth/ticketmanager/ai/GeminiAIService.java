@@ -45,7 +45,8 @@ public class GeminiAIService implements AIService {
         }
 
         try {
-            String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey);
+            String url = String.format(
+                    "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey);
 
             Map<String, Object> body = createRequestBody(title, description);
             HttpHeaders headers = new HttpHeaders();
@@ -56,19 +57,40 @@ public class GeminiAIService implements AIService {
 
             return parseResponse(responseStr);
         } catch (Exception e) {
-            log.error("Failed to get suggestion from Gemini API: {}. Falling back to KeywordAIService.", e.getMessage());
+            log.error("Failed to get suggestion from Gemini API: {}. Falling back to KeywordAIService.",
+                    e.getMessage());
             return fallbackService.suggest(title, description);
         }
     }
 
     private Map<String, Object> createRequestBody(String title, String description) {
-        String prompt = String.format(
-            "Analyze this support ticket and suggest a category, priority, and a short one-line summary (max 100 chars). " +
-            "Category must be one of: BILLING, TECHNICAL, BUG, FEATURE, ACCOUNT, OTHER. " +
-            "Priority must be one of: LOW, MEDIUM, HIGH. " +
-            "Return only a plain JSON object with properties 'category', 'priority', and 'summary'. " +
-            "Ticket Title: %s. Ticket Description: %s",
-            title, description);
+        String prompt = String.format("""
+                You are an AI ticket assistant.
+
+                Rewrite and improve the title and description.
+                Then classify category and priority.
+                Then generate a short summary.
+
+                Return ONLY valid JSON.
+                No markdown.
+                No explanation.
+                No text outside JSON.
+
+                JSON format:
+                {
+                "title": "rewritten title",
+                "description": "rewritten description",
+                "category": "BILLING | TECHNICAL | BUG | FEATURE | ACCOUNT | OTHER",
+                "priority": "LOW | MEDIUM | HIGH",
+                "summary": "short summary"
+                }
+
+                Title:
+                %s
+
+                Description:
+                %s
+                """, title, description);
 
         Map<String, Object> textPart = new HashMap<>();
         textPart.put("text", prompt);
@@ -78,13 +100,28 @@ public class GeminiAIService implements AIService {
 
         Map<String, Object> body = new HashMap<>();
         body.put("contents", Collections.singletonList(content));
+
         return body;
     }
 
     private AISuggestResponse parseResponse(String responseStr) throws Exception {
         JsonNode root = objectMapper.readTree(responseStr);
-        String resultText = root.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
-        
+
+        JsonNode candidates = root.path("candidates");
+        if (candidates.isEmpty() || candidates.get(0) == null) {
+            throw new RuntimeException("No AI response candidates");
+        }
+
+        String resultText = candidates.get(0)
+                .path("content")
+                .path("parts")
+                .get(0)
+                .path("text")
+                .asText();
+
+        log.info("Gemini raw response: {}", resultText);
+
+        // Strip markdown code fences if present
         if (resultText.contains("```json")) {
             resultText = resultText.substring(resultText.indexOf("```json") + 7);
             resultText = resultText.substring(0, resultText.indexOf("```"));
@@ -93,12 +130,37 @@ public class GeminiAIService implements AIService {
             resultText = resultText.substring(0, resultText.indexOf("```"));
         }
 
+        // Strip any text before the first '{' and after the last '}'
+        int jsonStart = resultText.indexOf('{');
+        int jsonEnd = resultText.lastIndexOf('}');
+        if (jsonStart == -1 || jsonEnd == -1 || jsonEnd <= jsonStart) {
+            throw new RuntimeException("No valid JSON found in Gemini response: " + resultText);
+        }
+        resultText = resultText.substring(jsonStart, jsonEnd + 1);
+
+        log.info("Parsed JSON: {}", resultText);
+
         JsonNode jsonNode = objectMapper.readTree(resultText.trim());
 
+        TicketCategory category;
+        try {
+            category = TicketCategory.valueOf(jsonNode.path("category").asText("OTHER").trim().toUpperCase());
+        } catch (Exception e) {
+            category = TicketCategory.OTHER;
+        }
+
+        TicketPriority priority;
+        try {
+            priority = TicketPriority.valueOf(jsonNode.path("priority").asText("MEDIUM").trim().toUpperCase());
+        } catch (Exception e) {
+            priority = TicketPriority.MEDIUM;
+        }
+
         return new AISuggestResponse(
-            TicketCategory.valueOf(jsonNode.path("category").asText("OTHER").toUpperCase()),
-            TicketPriority.valueOf(jsonNode.path("priority").asText("MEDIUM").toUpperCase()),
-            jsonNode.path("summary").asText("")
-        );
+                category,
+                priority,
+                jsonNode.path("summary").asText(""),
+                jsonNode.path("title").asText(""),
+                jsonNode.path("description").asText(""));
     }
 }

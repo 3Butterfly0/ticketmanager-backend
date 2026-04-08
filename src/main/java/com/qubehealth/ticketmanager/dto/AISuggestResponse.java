@@ -13,4 +13,6 @@ public class AISuggestResponse {
     private TicketCategory category;
     private TicketPriority priority;
     private String summary;
+    private String title;
+    private String description;
 }

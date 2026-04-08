@@ -14,7 +14,9 @@ public class KeywordAIService implements AIService {
         return new AISuggestResponse(
             determineCategory(content),
             determinePriority(content),
-            generateSummary(description)
+            generateSummary(description),
+            title,
+            description
         );
     }
 
@@ -49,7 +51,7 @@ public class KeywordAIService implements AIService {
 
     private String generateSummary(String description) {
         if (description == null || description.isEmpty()) return "";
-        int end = Math.min(description.length(), 100);
-        return description.substring(0, end) + (description.length() > 100 ? "..." : "");
+        int end = Math.min(description.length(), 250);
+        return description.substring(0, end) + (description.length() > 250 ? "..." : "");
     }
 }
