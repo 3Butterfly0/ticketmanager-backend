@@ -40,27 +40,44 @@ public class GeminiAIService implements AIService {
     @Override
     public AISuggestResponse suggest(String title, String description) {
         if (apiKey == null || apiKey.isBlank()) {
-            log.warn("Gemini API key is not configured. Falling back to KeywordAIService.");
+            log.warn("Gemini API key is not configured. Falling back.");
             return fallbackService.suggest(title, description);
         }
 
-        try {
-            String url = String.format(
-                    "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey);
+        int maxRetries = 3; // Try up to 3 times
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = String.format(
+                        "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model,
+                        apiKey);
 
-            Map<String, Object> body = createRequestBody(title, description);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+                Map<String, Object> body = createRequestBody(title, description);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-            String responseStr = restTemplate.postForObject(url, entity, String.class);
+                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                String responseStr = restTemplate.postForObject(url, entity, String.class);
 
-            return parseResponse(responseStr);
-        } catch (Exception e) {
-            log.error("Failed to get suggestion from Gemini API: {}. Falling back to KeywordAIService.",
-                    e.getMessage());
-            return fallbackService.suggest(title, description);
+                return parseResponse(responseStr);
+
+            } catch (org.springframework.web.client.HttpServerErrorException.ServiceUnavailable e) {
+                log.warn("Google servers are busy (503). Attempt {} of {}", attempt, maxRetries);
+                if (attempt == maxRetries)
+                    break; // Give up after 3 tries
+
+                try {
+                    Thread.sleep(2000); // Wait 2 seconds before trying again
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (Exception e) {
+                log.error("Failed to get suggestion from Gemini API. Error details: ", e);
+                break; // Break on any other error (like bad parsing)
+            }
         }
+
+        log.error("Gemini API failed or timed out. Using keyword fallback.");
+        return fallbackService.suggest(title, description);
     }
 
     private Map<String, Object> createRequestBody(String title, String description) {
@@ -127,9 +144,10 @@ public class GeminiAIService implements AIService {
         body.put("contents", Collections.singletonList(content));
 
         Map<String, Object> generationConfig = new HashMap<>();
-        generationConfig.put("temperature", 1);
+        generationConfig.put("temperature", 0.4); // lower temp for strict categorization
         generationConfig.put("topP", 0.9);
         generationConfig.put("maxOutputTokens", 1000);
+        generationConfig.put("responseMimeType", "application/json"); // force strict JSON parsing
 
         body.put("generationConfig", generationConfig);
 
@@ -168,10 +186,27 @@ public class GeminiAIService implements AIService {
         JsonNode jsonNode = objectMapper.readTree(json);
 
         return new AISuggestResponse(
-                TicketCategory.valueOf(jsonNode.path("category").asText("OTHER").toUpperCase()),
-                TicketPriority.valueOf(jsonNode.path("priority").asText("MEDIUM").toUpperCase()),
+                safeCategory(jsonNode.path("category").asText("OTHER")),
+                safePriority(jsonNode.path("priority").asText("MEDIUM")),
                 jsonNode.path("summary").asText(""),
                 jsonNode.path("title").asText(""),
                 jsonNode.path("description").asText(""));
+    }
+
+    // helper methods to prevent IllegalArgumentExceptions
+    private TicketCategory safeCategory(String value) {
+        try {
+            return TicketCategory.valueOf(value.toUpperCase().trim());
+        } catch (IllegalArgumentException e) {
+            return TicketCategory.OTHER;
+        }
+    }
+
+    private TicketPriority safePriority(String value) {
+        try {
+            return TicketPriority.valueOf(value.toUpperCase().trim());
+        } catch (IllegalArgumentException e) {
+            return TicketPriority.MEDIUM;
+        }
     }
 }
