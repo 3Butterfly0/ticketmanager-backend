@@ -20,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/tickets")
 @RequiredArgsConstructor
+@CrossOrigin(origins = {"http://localhost:5173", "https://ticketmanager-frontend.vercel.app"})
 public class TicketController {
 
     private final TicketService ticketService;

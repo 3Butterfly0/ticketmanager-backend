@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
+@CrossOrigin(origins = {"http://localhost:5173", "https://ticketmanager-frontend.vercel.app"})
 public class AIController {
 
     private final AIService aiService;
