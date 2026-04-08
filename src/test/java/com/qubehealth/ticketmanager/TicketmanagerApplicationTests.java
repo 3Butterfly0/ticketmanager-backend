@@ -11,3 +11,5 @@ class TicketmanagerApplicationTests {
 	}
 
 }
+
+// ./mvnw spring-boot:run - run command
